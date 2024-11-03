@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Mix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .audio-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .audio-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .audio-card.incorrect {
+            background-color: rgba(255, 0, 0, 0.1);
+            pointer-events: none;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #likedSongs {
+            margin-top: 2rem;
+            width: 100%;
+            max-width: 600px;
+        }
+        .liked-song {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .liked-song img {
+            width: 50px;
+            height: 50px;
+            margin-right: 1rem;
+            border-radius: 4px;
+        }
+        .btn {
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffeeba;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <!-- GitHub Logo -->
+    <a href="https://github.com/synesthesia-ltd/memorymix" target="_blank" style="position: absolute; top: 20px; right: 20px; background: transparent;">
+        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" style="width: 40px; height: 40px; background: transparent;">
+    </a>
+    <h1 class="text-4xl font-bold mb-4 text-center text-gray-800">Memory Mix</h1>
+    
+    <!-- Added game description -->
+    <div class="max-w-2xl mx-auto mb-8 text-center text-gray-600">
+        <p class="mb-4">
+            Welcome to Memory Mix! This game is designed to help digital DJs sharpen their track recognition skills.
+        </p>
+        <p>
+            Load your music library, listen to random segments, and test your ability to identify tracks quickly. 
+            Improve your memory and become a more confident DJ!
+        </p>
+    </div>
+
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
+        <!-- Added warning message -->
+        <div class="warning text-yellow-800">
+            <strong>Warning:</strong> Uploaded songs will be lost when you refresh the page. This game processes audio locally for your privacy.
+        </div>
+
+        <label for="file-input" class="block mb-2 text-gray-700">Select your music folder:</label>
+        <input type="file" id="file-input" webkitdirectory multiple class="mb-4 w-full p-2 border border-gray-300 rounded">
+        <div class="mb-4">
+            <label for="card-count" class="block mb-2 text-gray-700">Number of cards (3-15):</label>
+            <input type="number" id="card-count" min="3" max="15" value="5" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+        </div>
+        <button id="stop-button" class="btn bg-red-500 text-white px-4 py-2 rounded mr-2">Stop</button>
+        <button id="play-segment-button" class="btn bg-blue-500 text-white px-4 py-2 rounded">Play Different Segment</button>
+        <button id="skip-round-button" class="btn bg-gray-500 text-white px-4 py-2 rounded">Skip Round</button>
+        <!-- Added clear liked songs button -->
+        <button id="clear-liked-songs-button" class="btn bg-red-500 text-white px-4 py-2 rounded">Clear Liked Songs</button>
+    </div>
+    <div id="game-container" class="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"></div>
+
+    <div id="likedSongs" class="mx-auto">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">Liked Songs</h2>
+        <div id="likedSongsList"></div>
+    </div>
+
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle" class="text-2xl font-bold mb-4 text-gray-800"></h2>
+            <img id="modalAlbumArt" class="mx-auto mb-4" style="max-width: 300px; max-height: 300px;">
+            <div id="modalInfo" class="text-gray-700"></div>
+            <div class="modal-buttons mt-4 flex justify-between">
+                <button id="likeButton" class="btn bg-green-500 text-white px-4 py-2 rounded">Like Song</button>
+                <button id="nextButton" class="btn bg-blue-500 text-white px-4 py-2 rounded">Next Round</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script>
+      let currentlyPlayingAudio = null;
+      let currentCorrectFile = null;
+      let currentAudioBuffer = null;
+
+      let likedSongs = JSON.parse(localStorage.getItem('likedSongs')) || [];
+
+      let files = []; // Add this line to store the files globally
+
+      document.getElementById('file-input').addEventListener('change', function(event) {
+        files = Array.from(event.target.files); // Update the global files array
+        console.log("Files loaded:", files.length); // Debug log
+        startNewRound(); // Start the first round when files are selected
+      });
+
+      // Function to show the info modal
+      function showInfoModal(file) {
+        const modal = document.getElementById('infoModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalAlbumArt = document.getElementById('modalAlbumArt');
+        const modalInfo = document.getElementById('modalInfo');
+        const likeButton = document.getElementById('likeButton');
+        const nextButton = document.getElementById('nextButton');
+
+        jsmediatags.read(file, {
+          onSuccess: function(tag) {
+            console.log("ID3 Tags:", tag.tags); // Debug log to check the tags
+            const { title, artist, album, year, genre, picture } = tag.tags;
+
+            modalTitle.textContent = title || file.name;
+            
+            let albumArtUrl = null;
+            if (picture) {
+              const { data, format } = picture;
+              const base64String = data.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+              albumArtUrl = `data:${format};base64,${btoa(base64String)}`;
+              modalAlbumArt.src = albumArtUrl;
+              modalAlbumArt.style.display = 'block';
+            } else {
+              modalAlbumArt.style.display = 'none';
+            }
+
+            modalInfo.innerHTML = `
+              <p><strong>Artist:</strong> ${artist || 'Unknown'}</p>
+              <p><strong>Album:</strong> ${album || 'Unknown'}</p>
+              <p><strong>Year:</strong> ${year || 'Unknown'}</p>
+              <p><strong>Genre:</strong> ${genre || 'Unknown'}</p>
+            `;
+
+            const songInfo = { title, artist, album, year, genre, albumArtUrl, fileName: file.name };
+            
+            likeButton.onclick = function() {
+              console.log("Like button clicked");
+              if (!likedSongs.some(song => song.fileName === file.name)) {
+                likeSong(songInfo);
+                likeButton.disabled = true;
+                likeButton.textContent = 'Liked';
+                console.log("Song liked:", songInfo);
+              }
+              modal.style.display = 'none'; // Close the modal
+              startNewRound(); // Start a new round
+            };
+
+            nextButton.onclick = function() {
+              console.log("Next button clicked");
+              modal.style.display = 'none';
+              startNewRound();
+            };
+
+            // Check if the song is already liked
+            if (likedSongs.some(song => song.fileName === file.name)) {
+              likeButton.disabled = true;
+              likeButton.textContent = 'Liked';
+            } else {
+              likeButton.disabled = false;
+              likeButton.textContent = 'Like Song';
+            }
+
+            modal.style.display = 'block';
+          },
+          onError: function(error) {
+            console.error('Error reading ID3 tags:', error);
+            modalTitle.textContent = file.name;
+            modalAlbumArt.style.display = 'none';
+            modalInfo.textContent = 'Unable to read file information.';
+            likeButton.style.display = 'none';
+            modal.style.display = 'block';
+          }
+        });
+      }
+
+      function likeSong(songInfo) {
+        if (!likedSongs.some(song => song.fileName === songInfo.fileName)) {
+          likedSongs.push(songInfo);
+          localStorage.setItem('likedSongs', JSON.stringify(likedSongs));
+          updateLikedSongsList();
+        }
+      }
+
+      function updateLikedSongsList() {
+        const likedSongsList = document.getElementById('likedSongsList');
+        likedSongsList.innerHTML = '';
+        likedSongs.forEach(song => {
+          const songElement = document.createElement('div');
+          songElement.className = 'liked-song';
+          songElement.innerHTML = `
+            ${song.albumArtUrl ? `<img src="${song.albumArtUrl}" alt="Album Art">` : ''}
+            <div>
+              <strong>${song.title || song.fileName}</strong>
+              ${song.artist ? `<br>${song.artist}` : ''}
+              ${song.album ? `<br>${song.album}` : ''}
+            </div>
+          `;
+          likedSongsList.appendChild(songElement);
+        });
+      }
+
+      // Call this function when the page loads to display any previously liked songs
+      updateLikedSongsList();
+
+      // Close the modal when clicking outside or on the close button
+      window.onclick = function(event) {
+        const modal = document.getElementById('infoModal');
+        if (event.target == modal || event.target.className == 'close') {
+          modal.style.display = 'none';
+          startNewRound();
+        }
+      }
+
+      let isRoundInProgress = false; // Flag to track round status
+
+      // Function to start a new round
+      function startNewRound() {
+        if (isRoundInProgress) return; // Prevent multiple calls
+        isRoundInProgress = true; // Set flag to true
+
+        console.log("Starting new round"); // Debug log
+        stopAudio();
+        
+        // Clear existing cards
+        const gameContainer = document.getElementById('game-container');
+        gameContainer.innerHTML = ''; // Clear the container
+
+        console.log("Files available:", files.length); // Debug log
+
+        const cardCount = parseInt(document.getElementById('card-count').value, 10);
+        const selectedFiles = shuffle(files.filter(isSupportedAudio)).slice(0, cardCount);
+
+        console.log("Selected files:", selectedFiles.length); // Debug log
+
+        // Choose one of the selected files to be the correct file
+        currentCorrectFile = selectedFiles[Math.floor(Math.random() * selectedFiles.length)];
+
+        console.log("Current correct file:", currentCorrectFile.name); // Debug log
+
+        // Process and play the correct file
+        processAudioFile(currentCorrectFile).then(sampleURL => {
+          stopAudio(); // Ensure any previous audio is stopped
+          currentlyPlayingAudio = new Audio(sampleURL);
+          currentlyPlayingAudio.play();
+
+          // Create cards for the selected files
+          selectedFiles.forEach(file => {
+            fetchCoverArt(file).then(coverArtUrl => {
+              createAudioCard(file, file === currentCorrectFile, coverArtUrl);
+            });
+          });
+
+          isRoundInProgress = false; // Reset flag after processing
+        }).catch(error => {
+          console.error('Error processing file:', currentCorrectFile.name, error);
+          isRoundInProgress = false; // Reset flag on error
+        });
+      }
+
+      // Helper function to check if a file is a supported audio format
+      function isSupportedAudio(file) {
+        const supportedFormats = [
+          'audio/mpeg',    // MP3
+          'audio/wav',     // WAV
+          'audio/x-wav',   // WAV (alternative MIME type)
+          'audio/flac',    // FLAC
+          'audio/x-flac',  // FLAC (alternative MIME type)
+          'audio/aac',     // AAC
+          'audio/ogg',     // OGG
+          'audio/x-ogg',   // OGG (alternative MIME type)
+        ];
+        return supportedFormats.includes(file.type) || /\.(mp3|wav|flac|aac|ogg)$/i.test(file.name);
+      }
+
+      // Function to shuffle array (Fisher-Yates Shuffle)
+      function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+
+      // Function to create clickable audio card
+      function createAudioCard(file, isCorrect, coverArtUrl) {
+        const card = document.createElement('div');
+        card.className = 'audio-card bg-white p-4 rounded-lg shadow-md cursor-pointer text-center';
+        
+        // Add cover art if available
+        if (coverArtUrl) {
+          const img = document.createElement('img');
+          img.src = coverArtUrl;
+          img.className = 'w-24 h-24 mx-auto mb-2 rounded';
+          card.appendChild(img);
+        }
+
+        // Add the filename (without extension) as the title
+        const title = document.createElement('div');
+        title.className = 'text-sm font-medium text-gray-700';
+        title.innerText = file.name.replace(/\.[^/.]+$/, "");  // Remove file extension
+        card.appendChild(title);
+
+        card.addEventListener('click', function() {
+          if (isCorrect) {
+            showInfoModal(file);
+          } else {
+            card.classList.add('incorrect');
+            // Count how many cards are incorrect
+            const incorrectCards = document.querySelectorAll('.audio-card.incorrect').length;
+            const totalCards = document.querySelectorAll('.audio-card').length;
+            
+            // If all but one card (the correct one) are incorrect, reveal the correct answer
+            if (incorrectCards === totalCards - 1) {
+              document.querySelectorAll('.audio-card').forEach(c => {
+                if (!c.classList.contains('incorrect')) {
+                  c.classList.add('bg-green-200');
+                }
+              });
+              setTimeout(() => {
+                startNewRound();
+              }, 1500);
+            }
+          }
+        });
+
+        document.getElementById('game-container').appendChild(card);
+      }
+
+      // Function to process each supported audio file and create a 1-minute sample
+      function processAudioFile(file) {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const reader = new FileReader();
+
+        return new Promise((resolve, reject) => {
+          reader.onload = function(e) {
+            audioContext.decodeAudioData(e.target.result, function(buffer) {
+              currentAudioBuffer = buffer;
+              const sampleBuffer = createSampleBuffer(buffer, 0, Math.min(60, buffer.duration));
+              const sampleBlob = bufferToWave(sampleBuffer, sampleBuffer.length);
+              const sampleURL = URL.createObjectURL(sampleBlob);
+              resolve(sampleURL);
+            }, function(error) {
+              console.error('Error decoding audio data:', error);
+              reject(error);
+            });
+          };
+
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      // Helper function to create a sample buffer
+      function createSampleBuffer(buffer, start, end) {
+        const sampleBuffer = new AudioContext().createBuffer(
+          buffer.numberOfChannels,
+          (end - start) * buffer.sampleRate,
+          buffer.sampleRate
+        );
+
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+          sampleBuffer.copyToChannel(
+            buffer.getChannelData(channel).subarray(
+              start * buffer.sampleRate,
+              end * buffer.sampleRate
+            ),
+            channel
+          );
+        }
+
+        return sampleBuffer;
+      }
+
+      // Convert AudioBuffer to Blob for playback
+      function bufferToWave(buffer, len) {
+        const numOfChan = buffer.numberOfChannels;
+        const length = len * numOfChan * 2 + 44;
+        const bufferArr = new ArrayBuffer(length);
+        const view = new DataView(bufferArr);
+        const channels = [];
+        let i;
+        let sample;
+        let offset = 0;
+        let pos = 0;
+
+        // Write WAV header
+        setUint32(0x46464952); // "RIFF"
+        setUint32(length - 8); // file length - 8
+        setUint32(0x45564157); // "WAVE"
+
+        setUint32(0x20746d66); // "fmt " chunk
+        setUint32(16); // length = 16
+        setUint16(1); // PCM (uncompressed)
+        setUint16(numOfChan);
+        setUint32(buffer.sampleRate);
+        setUint32(buffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+        setUint16(numOfChan * 2); // block-align
+        setUint16(16); // 16-bit (hardcoded in this demo)
+
+        setUint32(0x61746164); // "data" - chunk
+        setUint32(length - pos - 4); // chunk length
+
+        // Write interleaved data
+        for (i = 0; i < buffer.numberOfChannels; i++)
+          channels.push(buffer.getChannelData(i));
+
+        while (pos < length) {
+          for (i = 0; i < numOfChan; i++) {
+            // interleave channels
+            sample = Math.max(-1, Math.min(1, channels[i][offset])); // clamp
+            sample = (sample < 0 ? sample * 0x8000 : sample * 0x7fff) | 0; // scale to 16-bit signed int
+            view.setInt16(pos, sample, true); // write 16-bit sample
+            pos += 2;
+          }
+          offset++; // next source sample
+        }
+
+        return new Blob([bufferArr], { type: 'audio/wav' });
+
+        function setUint16 (data) {
+          view.setUint16(pos, data, true);
+          pos += 2;
+        }
+
+        function setUint32 (data) {
+          view.setUint32(pos, data, true);
+          pos += 4;
+        }
+      }
+
+      // Function to fetch cover art if available
+      function fetchCoverArt (file) {
+        return new Promise((resolve, reject) => {
+          jsmediatags.read(file, {
+            onSuccess: function (tag) {
+              if (tag.tags.picture) {
+                const picture = tag.tags.picture;
+                const base64String = picture.data.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+                const base64 = `data:${picture.format};base64,${btoa(base64String)}`;
+                resolve(base64);
+              } else {
+                resolve(null);  // No cover art available
+              }
+            },
+            onError: function (error) {
+              console.error('Error reading ID3 tags:', error);
+              resolve(null);
+            }
+          });
+        });
+      }
+
+      // Function to stop the currently playing audio
+      function stopAudio() {
+        if (currentlyPlayingAudio) {
+          currentlyPlayingAudio.pause();
+          currentlyPlayingAudio.currentTime = 0;
+          currentlyPlayingAudio = null; // Clear the reference
+        }
+      }
+
+      // Function to play a different segment of the current song
+      function playDifferentSegment() {
+        if (currentAudioBuffer) {
+          const duration = currentAudioBuffer.duration;
+          const start = Math.random() * (duration - 60); // Random start point, ensuring at least 60 seconds left
+          const end = Math.min(start + 60, duration);
+
+          const newSampleBuffer = createSampleBuffer(currentAudioBuffer, start, end);
+          const newSampleBlob = bufferToWave(newSampleBuffer, newSampleBuffer.length);
+          const newSampleURL = URL.createObjectURL(newSampleBlob);
+
+          stopAudio();
+          currentlyPlayingAudio = new Audio(newSampleURL);
+          currentlyPlayingAudio.play();
+        }
+      }
+
+      // Add event listeners for the buttons
+      document.getElementById('stop-button').addEventListener('click', stopAudio);
+      document.getElementById('play-segment-button').addEventListener('click', playDifferentSegment);
+      document.getElementById('skip-round-button').addEventListener('click', function() {
+        console.log("Skip round button clicked");
+        startNewRound(); // Call the function to start a new round
+      });
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const nextButton = document.getElementById('nextButton');
+        if (nextButton) {
+          nextButton.addEventListener('click', function() {
+            console.log("Next button clicked (global listener)");
+            const modal = document.getElementById('infoModal');
+            modal.style.display = 'none';
+            startNewRound();
+          });
+        } else {
+          console.error("Next button not found");
+        }
+      });
+
+      document.addEventListener('click', function(event) {
+        console.log('Clicked element:', event.target);
+      });
+
+      // Add this function to clear liked songs
+      function clearLikedSongs() {
+        likedSongs = []; // Clear the liked songs array
+        localStorage.removeItem('likedSongs'); // Remove from local storage
+        updateLikedSongsList(); // Update the displayed list
+      }
+
+      // Add event listener for the clear button
+      document.getElementById('clear-liked-songs-button').addEventListener('click', clearLikedSongs);
+
+      console.log("Script loaded");
+    </script>
+
+</body>
+</html>
